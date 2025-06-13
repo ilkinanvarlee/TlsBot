@@ -28,10 +28,10 @@ class TLSBot:
     CALENDAR_CHANNEL_ID = os.getenv("CALENDAR_CHANNEL_ID")
     
     # Add proxy settings
-    PROXY_HOST = 'https://proxy2.webshare.io/'  # e.g., "proxy.example.com"
-    PROXY_PORT = '198.23.239.134'  # e.g., "8080"
-    PROXY_USER = 'dfbhwtck ' # if auth required
-    PROXY_PASS = '16lu6q7n6w2m ' # if auth required
+    PROXY_HOST = '198.23.239.134'  
+    PROXY_PORT = '6540'  
+    PROXY_USER = 'dfbhwtck' 
+    PROXY_PASS = '16lu6q7n6w2m ' 
 
     def cleanup_chrome_processes(self):
         """Kill any existing Chrome processes"""
