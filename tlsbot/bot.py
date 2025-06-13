@@ -964,6 +964,7 @@ class TLSBot:
         except Exception as e:
             print(f"❌ Proxy switch error: {e}")
             return False
+        
     def switch_proxy_then_click_select(self):
         """Switch proxy FIRST, then look for and click Select button"""
         try:
@@ -1571,49 +1572,7 @@ class TLSBot:
             print(f"❌ Proxy switch error: {e}")
             return False
 
-    def run_with_immediate_switching(self):
-        """Main run method with immediate proxy switching after each successful step"""
-        max_attempts = len(self.PROXY_LIST)
-        
-        for attempt in range(max_attempts):
-            try:
-                print(f"🚀 Immediate switching run attempt {attempt + 1}")
-                
-                # STEP 1: Login and immediate switch
-                if self.login_and_immediate_switch():
-                    print("✅ Login and proxy switch successful!")
-                    
-                    # STEP 2: Select and immediate switch
-                    if self.click_select_and_immediate_switch():
-                        print("✅ Select and proxy switch successful!")
-                        
-                        # STEP 3: Continue and immediate switch
-                        if self.click_continue_and_immediate_switch():
-                            print("✅ Continue and proxy switch successful!")
-                            
-                            # STEP 4: Final page processing
-                            try:
-                                self.print_appointment_info()
-                                print("🎉 SUCCESS! Completed all steps with immediate switching!")
-                                return True
-                            except Exception as e:
-                                print(f"⚠️ Final step error: {e}")
-                        else:
-                            print("❌ Continue step failed")
-                    else:
-                        print("❌ Select step failed")
-                else:
-                    print("❌ Login step failed")
-                
-                # If any step failed, try with next proxy
-                print("🔄 Attempt failed, trying with next proxy...")
-                
-            except Exception as e:
-                print(f"⚠️ Run attempt error: {e}")
-                continue
-        
-        print("❌ All immediate switching attempts failed")
-        return False
+
 def main():
     bot = TLSBot()
     bot.run()
