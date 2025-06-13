@@ -31,7 +31,7 @@ class TLSBot:
     PROXY_HOST = '198.23.239.134'  
     PROXY_PORT = '6540'  
     PROXY_USER = 'dfbhwtck' 
-    PROXY_PASS = '16lu6q7n6w2m' 
+    PROXY_PASS = '16lu6q7n6w2m'
 
     def cleanup_chrome_processes(self):
         """Kill any existing Chrome processes"""
@@ -55,7 +55,6 @@ class TLSBot:
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--start-maximized")
         
         # Fix user data directory issue
         import tempfile
@@ -63,46 +62,58 @@ class TLSBot:
         temp_dir = tempfile.mkdtemp()
         chrome_options.add_argument(f"--user-data-dir={temp_dir}/{uuid.uuid4()}")
         chrome_options.add_argument("--remote-debugging-port=0")
-        chrome_options.add_argument("--disable-background-timer-throttling")
-        chrome_options.add_argument("--disable-renderer-backgrounding")
         
-        # Add residential proxy or rotating proxy
+        # Add proxy with debug output
         if self.PROXY_HOST and self.PROXY_PORT:
-            # Extract hostname from URL if it contains protocol
-            proxy_host = self.PROXY_HOST
-            if proxy_host.startswith('http://') or proxy_host.startswith('https://'):
-                from urllib.parse import urlparse
-                parsed = urlparse(proxy_host)
-                proxy_host = parsed.hostname
+            proxy_host = self.PROXY_HOST.strip()
+            proxy_port = self.PROXY_PORT.strip()
+            proxy_user = self.PROXY_USER.strip()
+            proxy_pass = self.PROXY_PASS.strip()
             
-            if self.PROXY_USER and self.PROXY_PASS:
-                proxy = f"{self.PROXY_USER}:{self.PROXY_PASS}@{proxy_host}:{self.PROXY_PORT}"
+            if proxy_user and proxy_pass:
+                proxy_string = f"{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}"
+                chrome_options.add_argument(f"--proxy-server=http://{proxy_string}")
+                print(f"🔧 Using authenticated proxy: http://{proxy_user}:***@{proxy_host}:{proxy_port}")
             else:
-                proxy = f"{proxy_host}:{self.PROXY_PORT}"
-            
-            chrome_options.add_argument(f"--proxy-server=http://{proxy}")
+                proxy_string = f"{proxy_host}:{proxy_port}"
+                chrome_options.add_argument(f"--proxy-server=http://{proxy_string}")
+                print(f"🔧 Using proxy: http://{proxy_string}")
+        else:
+            print("❌ No proxy configured")
         
         # Anti-detection measures
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
-        # User agent rotation
+        # User agent
         user_agents = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
         ]
         import random
-        chrome_options.add_argument(f"--user-agent={random.choice(user_agents)}")
+        chosen_ua = random.choice(user_agents)
+        chrome_options.add_argument(f"--user-agent={chosen_ua}")
+        print(f"🌐 Using User-Agent: {chosen_ua}")
         
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-        
-        # Execute script to hide automation
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
-        return driver
-    
+        try:
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            # Test if proxy is working by checking IP
+            try:
+                driver.get("https://httpbin.org/ip")
+                time.sleep(3)
+                page_text = driver.find_element(By.TAG_NAME, "body").text
+                print(f"🌍 Current IP: {page_text}")
+            except Exception as e:
+                print(f"⚠️ IP check failed: {e}")
+            
+            return driver
+            
+        except Exception as e:
+            print(f"❌ Driver setup failed: {e}")
+            raise
     def add_stealth_measures(self):
         """Add additional anti-detection measures"""
         # Random delays between actions
