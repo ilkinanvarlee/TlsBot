@@ -256,6 +256,7 @@ class TLSBot:
                 try:
                     print(f"🔗 Trying direct access to: {url}")
                     self.driver.get(url)
+                    self.driver.save_screenshot("/tmp/select_page_new_proxy3.png")
                     time.sleep(5)
                     
                     # Restore cookies and session
@@ -271,6 +272,7 @@ class TLSBot:
                     
                     # Check if we're successfully logged in
                     current_url = self.driver.current_url
+                    self.driver.save_screenshot("/tmp/select_page_new_proxy4.png")
                     page_source = self.driver.page_source.lower()
                     
                     print(f"📍 After cookie restore: {current_url}")
@@ -280,8 +282,9 @@ class TLSBot:
                         "dashboard" in current_url.lower() or
                         "select" in page_source or
                         "appointment" in page_source):
-                        
+                        self.driver.save_screenshot("/tmp/select_page_new_proxy5.png")
                         print("✅ Successfully accessed with new proxy!")
+
                         success = True
                         break
                         
@@ -1129,6 +1132,7 @@ class TLSBot:
                 
                 # STEP 1: Login and immediate switch
                 if self.login_and_immediate_switch():
+                    self.driver.save_screenshot("/tmp/select_page_new_proxy2.png")
                     print("✅ Login and proxy switch successful!")
                     
                     # STEP 2: Select and immediate switch
