@@ -1294,7 +1294,8 @@ class TLSBot:
 
             
     def login_and_immediate_switch(self):
-        """Login and immediately switch proxy after clicking login but before redirect"""
+    
+        """Login with immediate proxy switch after form submission"""
         self.driver.get(self.LOGIN_URL)
         time.sleep(5)
 
@@ -1306,7 +1307,7 @@ class TLSBot:
             print(f"Initial page title: {self.driver.title}")
             print(f"Initial URL: {self.driver.current_url}")
             
-            # Find and fill login form
+            # Find and fill login form (keep existing logic)
             email_field = None
             try:
                 email_field = self.wait.until(EC.visibility_of_element_located((By.ID, "email-input-field")))
@@ -1357,22 +1358,25 @@ class TLSBot:
                                 return False
                     
                     if login_button:
-                        print("🔐 About to click login - saving session data...")
+                        print("🔄 About to click login - preparing for proxy switch...")
                         
-                        # Save session data before clicking
+                        # STRATEGY 1: Extract cookies and session data before clicking
                         cookies_before = self.driver.get_cookies()
+                        session_storage = self.driver.execute_script("return window.sessionStorage;")
+                        local_storage = self.driver.execute_script("return window.localStorage;") 
+                        
                         print(f"📦 Saved {len(cookies_before)} cookies before login")
                         
                         # Click login button
                         login_button.click()
-                        print("🔄 Login clicked - IMMEDIATELY switching proxy before redirect...")
+                        print("🔄 Login clicked - waiting briefly...")
                         
-                        # Wait just 1-2 seconds for form submission to start
+                        # Wait very short time for form submission
                         time.sleep(2)
                         
-                        # IMMEDIATELY switch proxy BEFORE redirect completes
-                        print("🚀 Switching proxy immediately after login click...")
-                        return self.switch_proxy_mid_auth_flow(cookies_before)
+                        # IMMEDIATELY switch to new proxy before redirect completes
+                        print("🔄 Switching proxy mid-session...")
+                        return self.continue_with_new_proxy(cookies_before, session_storage, local_storage)
             
             return False
             
