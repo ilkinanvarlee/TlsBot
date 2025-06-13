@@ -984,7 +984,7 @@ class TLSBot:
                 return False
             
             print(f"🔧 Switching to proxy: {new_proxy['host']} BEFORE Select step")
-            
+            self.driver.save_screenshot("/tmp/select_page_new_proxy1.png")
             # Quit current driver
             if self.driver:
                 self.driver.quit()
