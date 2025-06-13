@@ -123,6 +123,215 @@ class TLSBot:
             subprocess.run(["pkill", "-f", "chromedriver"], check=False)
         except Exception as e:
             print(f"Cleanup warning: {e}")
+    def login_with_proxy_switch(self):
+        """Login with immediate proxy switch after form submission"""
+        self.driver.get(self.LOGIN_URL)
+        time.sleep(5)
+
+        try:
+            if self.is_blocked():
+                print("🚫 Blocked on login page")
+                return False
+
+            print(f"Initial page title: {self.driver.title}")
+            print(f"Initial URL: {self.driver.current_url}")
+            
+            # Find and fill login form (keep existing logic)
+            email_field = None
+            try:
+                email_field = self.wait.until(EC.visibility_of_element_located((By.ID, "email-input-field")))
+            except:
+                try:
+                    email_field = self.wait.until(EC.visibility_of_element_located((By.NAME, "email")))
+                except:
+                    try:
+                        email_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='email']")))
+                    except:
+                        print("❌ Email field not found")
+                        return False
+            
+            if email_field:
+                email_field.send_keys(self.EMAIL)
+                time.sleep(2)
+                
+                # Find password field
+                password_field = None
+                try:
+                    password_field = self.wait.until(EC.visibility_of_element_located((By.ID, "password-input-field")))
+                except:
+                    try:
+                        password_field = self.wait.until(EC.visibility_of_element_located((By.NAME, "password")))
+                    except:
+                        try:
+                            password_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='password']")))
+                        except:
+                            print("❌ Password field not found")
+                            return False
+                
+                if password_field:
+                    password_field.send_keys(self.PASSWORD)
+                    time.sleep(2)
+                    
+                    # Find login button
+                    login_button = None
+                    try:
+                        login_button = self.wait.until(EC.element_to_be_clickable((By.ID, "btn-login")))
+                    except:
+                        try:
+                            login_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']")))
+                        except:
+                            try:
+                                login_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@type='submit']")))
+                            except:
+                                print("❌ Login button not found")
+                                return False
+                    
+                    if login_button:
+                        print("🔄 About to click login - preparing for proxy switch...")
+                        
+                        # STRATEGY 1: Extract cookies and session data before clicking
+                        cookies_before = self.driver.get_cookies()
+                        session_storage = self.driver.execute_script("return window.sessionStorage;")
+                        local_storage = self.driver.execute_script("return window.localStorage;") 
+                        
+                        print(f"📦 Saved {len(cookies_before)} cookies before login")
+                        
+                        # Click login button
+                        login_button.click()
+                        print("🔄 Login clicked - waiting briefly...")
+                        
+                        # Wait very short time for form submission
+                        time.sleep(2)
+                        
+                        # IMMEDIATELY switch to new proxy before redirect completes
+                        print("🔄 Switching proxy mid-session...")
+                        return self.continue_with_new_proxy(cookies_before, session_storage, local_storage)
+            
+            return False
+            
+        except Exception as e:
+            print(f"❌ Login error: {e}")
+            return False
+
+    def continue_with_new_proxy(self, cookies_before, session_storage, local_storage):
+        """Continue session with new proxy and preserved session data"""
+        try:
+            # Get next proxy
+            new_proxy = self.get_next_proxy()
+            if not new_proxy:
+                print("❌ No more proxies available")
+                return False
+            
+            print(f"🔄 Switching to proxy: {new_proxy['host']}")
+            
+            # Quit current driver
+            current_url = self.driver.current_url
+            self.driver.quit()
+            time.sleep(1)
+            
+            # Create new driver with different proxy
+            self.driver = self.create_driver_with_proxy(new_proxy)
+            if not self.driver:
+                print("❌ Failed to create new driver")
+                return False
+            
+            self.wait = WebDriverWait(self.driver, 20)
+            self.current_proxy = new_proxy
+            
+            # Navigate to the auth-callback URL or dashboard directly
+            print("🔄 Navigating with new proxy...")
+            
+            # Try different continuation strategies
+            success = False
+            
+            # Strategy 1: Try to go directly to dashboard/travel groups
+            dashboard_urls = [
+                "https://visas-de.tlscontact.com/en-us/travel-groups",
+                "https://visas-de.tlscontact.com/en-us/dashboard",
+                "https://visas-de.tlscontact.com/en-us/"
+            ]
+            
+            for url in dashboard_urls:
+                try:
+                    print(f"🔗 Trying direct access to: {url}")
+                    self.driver.get(url)
+                    time.sleep(5)
+                    
+                    # Restore cookies and session
+                    for cookie in cookies_before:
+                        try:
+                            self.driver.add_cookie(cookie)
+                        except:
+                            pass
+                    
+                    # Refresh after adding cookies
+                    self.driver.refresh()
+                    time.sleep(5)
+                    
+                    # Check if we're successfully logged in
+                    current_url = self.driver.current_url
+                    page_source = self.driver.page_source.lower()
+                    
+                    print(f"📍 After cookie restore: {current_url}")
+                    
+                    # Check for success indicators
+                    if ("travel" in current_url.lower() or 
+                        "dashboard" in current_url.lower() or
+                        "select" in page_source or
+                        "appointment" in page_source):
+                        
+                        print("✅ Successfully accessed with new proxy!")
+                        success = True
+                        break
+                        
+                    elif self.is_blocked():
+                        print(f"🚫 Still blocked with {new_proxy['host']}")
+                        continue
+                    else:
+                        print(f"🤔 Uncertain status with {url}")
+                        
+                except Exception as e:
+                    print(f"⚠️ Error trying {url}: {e}")
+                    continue
+            
+            # Strategy 2: If direct access failed, try the original auth flow
+            if not success:
+                print("🔄 Direct access failed, trying fresh login with new proxy...")
+                return self.login()  # Regular login with new proxy
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Proxy switch error: {e}")
+            return False
+
+    def run_with_mid_session_switching(self):
+        """Enhanced run method with mid-session proxy switching"""
+        max_attempts = len(self.PROXY_LIST) * 3  # More attempts since we switch mid-session
+        
+        for attempt in range(max_attempts):
+            try:
+                print(f"🚀 Enhanced bot run attempt {attempt + 1}")
+                
+                # Use the new login method with proxy switching
+                if self.login_with_proxy_switch():
+                    if self.click_first_select():
+                        if self.click_continue():
+                            self.wait_final_page()
+                            return True  # Success!
+                            
+                # If failed, try next proxy
+                print("🔄 Attempt failed, rotating to next proxy...")
+                self.rotate_proxy_if_blocked()
+                continue
+                        
+            except Exception as e:
+                print(f"⚠️ Enhanced bot run error: {e}")
+                self.rotate_proxy_if_blocked()
+                continue
+        
+        print("❌ All enhanced attempts failed")
+        return False
 
     def get_next_proxy(self):
         """Get the next proxy in rotation"""
