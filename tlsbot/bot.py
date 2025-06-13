@@ -31,7 +31,7 @@ class TLSBot:
     PROXY_HOST = '198.23.239.134'  
     PROXY_PORT = '6540'  
     PROXY_USER = 'dfbhwtck' 
-    PROXY_PASS = '16lu6q7n6w2m ' 
+    PROXY_PASS = '16lu6q7n6w2m' 
 
     def cleanup_chrome_processes(self):
         """Kill any existing Chrome processes"""
