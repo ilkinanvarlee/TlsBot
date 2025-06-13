@@ -197,17 +197,14 @@ class TLSBot:
             pass
     def login(self):
         self.driver.get(self.LOGIN_URL)
-        time.sleep(5)  # Increase wait time
+        time.sleep(5)
 
         try:
-            # Debug: Print page info
-            print(f"Page title: {self.driver.title}")
-            print(f"Current URL: {self.driver.current_url}")
+            # Debug: Print initial page info
+            print(f"Initial page title: {self.driver.title}")
+            print(f"Initial URL: {self.driver.current_url}")
             
-            # Check if we need to handle any redirects or additional steps
-            # Sometimes auth pages have multiple steps
-            
-            # Try to find the email field with different methods
+            # Find and fill login form
             email_field = None
             try:
                 email_field = self.wait.until(EC.visibility_of_element_located((By.ID, "email-input-field")))
@@ -218,16 +215,14 @@ class TLSBot:
                     try:
                         email_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='email']")))
                     except:
-                        # Print page source to debug
-                        print("Page source (first 1000 chars):")
-                        print(self.driver.page_source[:1000])
+                        print("❌ Email field not found")
                         return False
             
             if email_field:
                 email_field.send_keys(self.EMAIL)
                 time.sleep(2)
                 
-                # Try to find password field
+                # Find password field
                 password_field = None
                 try:
                     password_field = self.wait.until(EC.visibility_of_element_located((By.ID, "password-input-field")))
@@ -238,14 +233,14 @@ class TLSBot:
                         try:
                             password_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='password']")))
                         except:
-                            print("Password field not found")
+                            print("❌ Password field not found")
                             return False
                 
                 if password_field:
                     password_field.send_keys(self.PASSWORD)
                     time.sleep(2)
                     
-                    # Try to find login button
+                    # Find and click login button
                     login_button = None
                     try:
                         login_button = self.wait.until(EC.element_to_be_clickable((By.ID, "btn-login")))
@@ -256,29 +251,118 @@ class TLSBot:
                             try:
                                 login_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@type='submit']")))
                             except:
-                                print("Login button not found")
+                                print("❌ Login button not found")
                                 return False
                     
                     if login_button:
                         login_button.click()
-                        time.sleep(5)
+                        print("🔄 Login button clicked, waiting for redirect...")
                         
-                        # Rest of your login verification logic...
-                        print(f"After login URL: {self.driver.current_url}")
-                        return True
+                        # Wait for auth-callback
+                        try:
+                            WebDriverWait(self.driver, 10).until(
+                                EC.url_contains("auth-callback")
+                            )
+                            print(f"📍 Reached auth-callback: {self.driver.current_url}")
+                        except:
+                            print("⚠️ Didn't reach auth-callback")
+                        
+                        # Now wait for final redirect to dashboard
+                        print("🔄 Waiting for final redirect to dashboard...")
+                        time.sleep(10)  # Give time for redirect
+                        
+                        # Check multiple possible success indicators
+                        current_url = self.driver.current_url
+                        page_title = self.driver.title
+                        
+                        print(f"📍 Final URL: {current_url}")
+                        print(f"📄 Final page title: {page_title}")
+                        
+                        # Success indicators
+                        success_indicators = [
+                            "travel-groups" in current_url.lower(),
+                            "dashboard" in current_url.lower(),
+                            "appointment" in current_url.lower(),
+                            "booking" in current_url.lower(),
+                            "travel groups" in page_title.lower(),
+                            "dashboard" in page_title.lower(),
+                            "appointment" in page_title.lower()
+                        ]
+                        
+                        # Check for Select buttons (indicates we're on the right page)
+                        has_select_button = False
+                        try:
+                            select_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Select')] | //a[contains(text(), 'Select')] | //input[@value='Select']")
+                            if select_buttons:
+                                has_select_button = True
+                                print(f"✅ Found {len(select_buttons)} Select button(s)")
+                        except:
+                            pass
+                        
+                        # Check for error indicators
+                        error_indicators = [
+                            "error" in current_url.lower(),
+                            "login" in current_url.lower() and "auth-callback" not in current_url.lower(),
+                            "invalid" in page_title.lower(),
+                            "error" in page_title.lower()
+                        ]
+                        
+                        # If still on auth-callback, try to find a continue/redirect element
+                        if "auth-callback" in current_url:
+                            print("🔄 Still on auth-callback, looking for redirect elements...")
+                            try:
+                                # Look for any auto-redirect elements or continue buttons
+                                continue_elements = self.driver.find_elements(By.XPATH, 
+                                    "//a[contains(text(), 'Continue')] | //button[contains(text(), 'Continue')] | " +
+                                    "//a[contains(text(), 'Proceed')] | //button[contains(text(), 'Proceed')] | " +
+                                    "//a[contains(@href, 'travel')] | //a[contains(@href, 'dashboard')]"
+                                )
+                                if continue_elements:
+                                    print(f"🔗 Found {len(continue_elements)} potential redirect elements")
+                                    # Click the first one
+                                    self.driver.execute_script("arguments[0].click();", continue_elements[0])
+                                    time.sleep(5)
+                                    print(f"📍 After click URL: {self.driver.current_url}")
+                            except Exception as e:
+                                print(f"⚠️ Error looking for redirect elements: {e}")
+                            
+                            # Check page source for auto-redirect script
+                            try:
+                                page_source = self.driver.page_source
+                                if "window.location" in page_source or "redirect" in page_source.lower():
+                                    print("🔄 Page contains redirect script, waiting...")
+                                    time.sleep(10)
+                                    print(f"📍 After waiting URL: {self.driver.current_url}")
+                            except:
+                                pass
+                        
+                        # Final verification
+                        final_url = self.driver.current_url
+                        final_title = self.driver.title
+                        
+                        if any(success_indicators) or has_select_button or "travel" in final_url.lower():
+                            print("✅ Login appears successful!")
+                            return True
+                        elif any(error_indicators):
+                            print("❌ Login failed - error detected")
+                            return False
+                        elif "auth-callback" in final_url:
+                            print("⚠️ Still on auth-callback page - login may be incomplete")
+                            # Save screenshot for debugging
+                            try:
+                                self.driver.save_screenshot("/tmp/auth_callback_stuck.png")
+                                print("📸 Screenshot saved: /tmp/auth_callback_stuck.png")
+                            except:
+                                pass
+                            return False
+                        else:
+                            print("🤔 Uncertain login status, proceeding anyway...")
+                            return True
             
             return False
             
         except Exception as e:
-            print(f"❌ Giriş zamanı xəta: {e}")
-            print(f"Current URL: {self.driver.current_url}")
-            print(f"Page title: {self.driver.title}")
-            # Save screenshot for debugging
-            try:
-                self.driver.save_screenshot("/tmp/login_error.png")
-                print("Screenshot saved to /tmp/login_error.png")
-            except:
-                pass
+            print(f"❌ Login error: {e}")
             return False
 
     def click_first_select(self):
