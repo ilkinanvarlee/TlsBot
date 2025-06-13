@@ -10,3 +10,4 @@ class Command(BaseCommand):
         bot = TLSBot()
         bot.run()
         print("✅ Bot icra olundu.")
+

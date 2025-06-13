@@ -43,26 +43,66 @@ class TLSBot:
 
 
     def login(self):
-
         self.driver.get(self.LOGIN_URL)
         time.sleep(3)
 
         try:
+            # Fill login form
             self.wait.until(EC.visibility_of_element_located((By.ID, "email-input-field"))).send_keys(self.EMAIL)
             self.wait.until(EC.visibility_of_element_located((By.ID, "password-input-field"))).send_keys(self.PASSWORD)
             self.wait.until(EC.element_to_be_clickable((By.ID, "btn-login"))).click()
-            print("Giriş sonrası URL:", self.driver.current_url)
-            time.sleep(3)
-
-            if "travel-groups" in self.driver.current_url:
-                print("✅ Giriş uğurlu oldu!")
-                return True
-            else:
-                print("❌ Giriş uğursuz oldu.")
-                return False
             
+            # Wait for redirect after login (auth-callback)
+            print("Waiting for auth redirect...")
+            time.sleep(5)  # Give more time for redirect
+            
+            # Wait for final redirect to dashboard/travel-groups
+            # Try to wait for either travel-groups URL or specific elements that indicate successful login
+            try:
+                # Option 1: Wait for travel-groups in URL
+                WebDriverWait(self.driver, 15).until(
+                    lambda driver: "travel-groups" in driver.current_url
+                )
+                print("✅ Giriş uğurlu oldu! (travel-groups URL)")
+                print("Final URL:", self.driver.current_url)
+                return True
+                
+            except TimeoutException:
+                # Option 2: If travel-groups URL doesn't appear, check for Select buttons or other indicators
+                try:
+                    # Wait for Select button to appear (indicates we're on the right page)
+                    WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.XPATH, "//button[contains(text(), 'Select')]"))
+                    )
+                    print("✅ Giriş uğurlu oldu! (Select button found)")
+                    print("Current URL:", self.driver.current_url)
+                    return True
+                    
+                except TimeoutException:
+                    # Option 3: Check for any other indicators of successful login
+                    try:
+                        # Look for common dashboard elements
+                        WebDriverWait(self.driver, 5).until(
+                            EC.any_of(
+                                EC.presence_of_element_located((By.CLASS_NAME, "dashboard")),
+                                EC.presence_of_element_located((By.CLASS_NAME, "travel-group")),
+                                EC.presence_of_element_located((By.XPATH, "//h1[contains(text(), 'Travel Groups')]")),
+                            )
+                        )
+                        print("✅ Giriş uğurlu oldu! (Dashboard elements found)")
+                        print("Current URL:", self.driver.current_url)
+                        return True
+                        
+                    except TimeoutException:
+                        print("❌ Giriş uğursuz oldu - expected elements not found")
+                        print("Current URL:", self.driver.current_url)
+                        # Print page source for debugging
+                        print("Page title:", self.driver.title)
+                        return False
+                
         except Exception as e:
             print(f"❌ Giriş zamanı xəta: {e}")
+            print("Current URL:", self.driver.current_url)
             return False
 
 
