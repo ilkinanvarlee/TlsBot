@@ -33,7 +33,7 @@ class TLSBot:
     PROXY_USER = 'dfbhwtck ' # if auth required
     PROXY_PASS = '16lu6q7n6w2m ' # if auth required
 
-        def __init__(self):
+    def __init__(self):
         self.driver = self.setup_driver()
         self.wait = WebDriverWait(self.driver, 20)
 
