@@ -123,6 +123,7 @@ class TLSBot:
             subprocess.run(["pkill", "-f", "chromedriver"], check=False)
         except Exception as e:
             print(f"Cleanup warning: {e}")
+
     def login_with_proxy_switch(self):
         """Login with immediate proxy switch after form submission"""
         self.driver.get(self.LOGIN_URL)
@@ -576,200 +577,9 @@ class TLSBot:
         except:
             return False
 
-    def login(self):
-        self.driver.get(self.LOGIN_URL)
-        time.sleep(5)
+   
 
-        try:
-            # Check if blocked before proceeding
-            if self.is_blocked():
-                print("🚫 Blocked on login page")
-                return False
-
-            print(f"Initial page title: {self.driver.title}")
-            print(f"Initial URL: {self.driver.current_url}")
-            
-            # Find and fill login form
-            email_field = None
-            try:
-                email_field = self.wait.until(EC.visibility_of_element_located((By.ID, "email-input-field")))
-            except:
-                try:
-                    email_field = self.wait.until(EC.visibility_of_element_located((By.NAME, "email")))
-                except:
-                    try:
-                        email_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='email']")))
-                    except:
-                        print("❌ Email field not found")
-                        return False
-            
-            if email_field:
-                email_field.send_keys(self.EMAIL)
-                time.sleep(2)
-                
-                # Find password field
-                password_field = None
-                try:
-                    password_field = self.wait.until(EC.visibility_of_element_located((By.ID, "password-input-field")))
-                except:
-                    try:
-                        password_field = self.wait.until(EC.visibility_of_element_located((By.NAME, "password")))
-                    except:
-                        try:
-                            password_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='password']")))
-                        except:
-                            print("❌ Password field not found")
-                            return False
-                
-                if password_field:
-                    password_field.send_keys(self.PASSWORD)
-                    time.sleep(2)
-                    
-                    # Find and click login button
-                    login_button = None
-                    try:
-                        login_button = self.wait.until(EC.element_to_be_clickable((By.ID, "btn-login")))
-                    except:
-                        try:
-                            login_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']")))
-                        except:
-                            try:
-                                login_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@type='submit']")))
-                            except:
-                                print("❌ Login button not found")
-                                return False
-                    
-                    if login_button:
-                        login_button.click()
-                        print("🔄 Login button clicked, waiting for redirect...")
-                        
-                        # Wait for auth-callback
-                        try:
-                            WebDriverWait(self.driver, 10).until(EC.url_contains("auth-callback"))
-                            print(f"📍 Reached auth-callback: {self.driver.current_url}")
-                        except:
-                            print("⚠️ Didn't reach auth-callback")
-                        
-                        # Check if blocked after login
-                        if self.is_blocked():
-                            print("🚫 Blocked after login")
-                            return False
-                        
-                        # Wait for final redirect
-                        print("🔄 Waiting for final redirect to dashboard...")
-                        time.sleep(10)
-                        
-                        current_url = self.driver.current_url
-                        page_title = self.driver.title
-                        
-                        print(f"📍 Final URL: {current_url}")
-                        print(f"📄 Final page title: {page_title}")
-                        
-                        # Success indicators
-                        success_indicators = [
-                            "travel-groups" in current_url.lower(),
-                            "dashboard" in current_url.lower(),
-                            "appointment" in current_url.lower(),
-                            "booking" in current_url.lower(),
-                            "travel groups" in page_title.lower(),
-                            "dashboard" in page_title.lower(),
-                            "appointment" in page_title.lower()
-                        ]
-                        
-                        # Check for Select buttons
-                        has_select_button = False
-                        try:
-                            select_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Select')] | //a[contains(text(), 'Select')] | //input[@value='Select']")
-                            if select_buttons:
-                                has_select_button = True
-                                print(f"✅ Found {len(select_buttons)} Select button(s)")
-                        except:
-                            pass
-                        
-                        if any(success_indicators) or has_select_button or "travel" in current_url.lower():
-                            print("✅ Login appears successful!")
-                            return True
-                        elif "auth-callback" in current_url:
-                            print("⚠️ Still on auth-callback page - login may be incomplete")
-                            try:
-                                self.driver.save_screenshot("/tmp/auth_callback_stuck.png")
-                                print("📸 Screenshot saved: /tmp/auth_callback_stuck.png")
-                            except:
-                                pass
-                            return False
-                        else:
-                            print("🤔 Uncertain login status, proceeding anyway...")
-                            return True
-            
-            return False
-            
-        except Exception as e:
-            print(f"❌ Login error: {e}")
-            return False
-
-    def click_first_select(self):
-        # Wait longer for page to load after login
-        time.sleep(10)
-        
-        print(f"🔍 Looking for Select button...")
-        print(f"Current URL: {self.driver.current_url}")
-        print(f"Page title: {self.driver.title}")
-        
-        # Check if blocked
-        if self.is_blocked():
-            print("🚫 Blocked on select page")
-            return False
-        
-        # Try different ways to find the select button
-        buttons = []
-        
-        try:
-            buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Select')]")
-            if buttons:
-                print(f"✅ Found {len(buttons)} 'Select' buttons")
-            else:
-                # Try other variations
-                buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'select')] | //input[@value='Select'] | //a[contains(text(), 'Select')]")
-                if buttons:
-                    print(f"✅ Found {len(buttons)} Select elements")
-        except Exception as e:
-            print(f"⚠️ Error finding Select buttons: {e}")
-        
-        # Debug: Print all clickable elements if no Select button found
-        if not buttons:
-            print("🔍 All clickable elements on page:")
-            try:
-                all_buttons = self.driver.find_elements(By.XPATH, "//button | //input[@type='submit'] | //input[@type='button'] | //a[contains(@class, 'btn')]")
-                for i, btn in enumerate(all_buttons[:10]):
-                    try:
-                        text = btn.text.strip()
-                        tag = btn.tag_name
-                        classes = btn.get_attribute('class')
-                        print(f"  {i+1}. <{tag}> '{text}' (class: {classes})")
-                    except:
-                        pass
-            except Exception as e:
-                print(f"⚠️ Error getting clickable elements: {e}")
-            
-            try:
-                self.driver.save_screenshot("/tmp/select_page.png")
-                print("📸 Screenshot saved: /tmp/select_page.png")
-            except:
-                pass
-        
-        # If we found buttons, try to click the first one
-        if buttons:
-            try:
-                self.driver.execute_script("arguments[0].click();", buttons[0])
-                time.sleep(3)
-                print("✅ 'Select' düyməsi klikləndi (JS click)!")
-                return True
-            except Exception as e:
-                print(f"⚠️ Select klik xətası: {e}")
-        
-        print("❌ 'Select' düyməsi tapılmadı.")
-        return False
-
+    
     def click_continue(self):
         try:
             self.wait.until(EC.url_contains("/workflow/service-level"))
@@ -877,100 +687,7 @@ class TLSBot:
                 print(f"❌ Telegram xətası: {response.text}")
         except Exception as e:
             print(f"❌ Telegram bildirişi xətası: {e}")
-    def login_and_immediate_switch(self):
-        """Login and immediately switch proxy after successful login"""
-        self.driver.get(self.LOGIN_URL)
-        time.sleep(5)
 
-        try:
-            if self.is_blocked():
-                print("🚫 Blocked on login page")
-                return False
-
-            print(f"Initial page title: {self.driver.title}")
-            print(f"Initial URL: {self.driver.current_url}")
-            
-            # Find and fill login form
-            email_field = None
-            try:
-                email_field = self.wait.until(EC.visibility_of_element_located((By.ID, "email-input-field")))
-            except:
-                try:
-                    email_field = self.wait.until(EC.visibility_of_element_located((By.NAME, "email")))
-                except:
-                    try:
-                        email_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='email']")))
-                    except:
-                        print("❌ Email field not found")
-                        return False
-            
-            if email_field:
-                email_field.send_keys(self.EMAIL)
-                time.sleep(2)
-                
-                # Find password field
-                password_field = None
-                try:
-                    password_field = self.wait.until(EC.visibility_of_element_located((By.ID, "password-input-field")))
-                except:
-                    try:
-                        password_field = self.wait.until(EC.visibility_of_element_located((By.NAME, "password")))
-                    except:
-                        try:
-                            password_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='password']")))
-                        except:
-                            print("❌ Password field not found")
-                            return False
-                
-                if password_field:
-                    password_field.send_keys(self.PASSWORD)
-                    time.sleep(2)
-                    
-                    # Find login button
-                    login_button = None
-                    try:
-                        login_button = self.wait.until(EC.element_to_be_clickable((By.ID, "btn-login")))
-                    except:
-                        try:
-                            login_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']")))
-                        except:
-                            try:
-                                login_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@type='submit']")))
-                            except:
-                                print("❌ Login button not found")
-                                return False
-                    
-                    if login_button:
-                        print("🔐 About to click login - saving session data...")
-                        
-                        # Save session data before clicking
-                        cookies_before = self.driver.get_cookies()
-                        print(f"📦 Saved {len(cookies_before)} cookies before login")
-                        
-                        # Click login button
-                        login_button.click()
-                        print("🔄 Login clicked - waiting for auth flow...")
-                        
-                        # Wait for auth-callback
-                        time.sleep(5)
-                        
-                        # Check if we reached auth-callback successfully
-                        current_url = self.driver.current_url
-                        if "auth-callback" in current_url:
-                            print(f"✅ Login successful - reached: {current_url}")
-                            
-                            # IMMEDIATELY switch proxy for next step
-                            print("🚀 Login successful! Immediately switching proxy for SELECT step...")
-                            return self.switch_proxy_and_navigate_to_select(cookies_before)
-                        else:
-                            print(f"❌ Login failed - unexpected URL: {current_url}")
-                            return False
-            
-            return False
-            
-        except Exception as e:
-            print(f"❌ Login error: {e}")
-            return False
 
     def switch_proxy_and_navigate_to_select(self, cookies_before):
         """Switch proxy immediately and navigate to Select page"""
@@ -1247,7 +964,160 @@ class TLSBot:
         except Exception as e:
             print(f"❌ Proxy switch error: {e}")
             return False
+    def switch_proxy_then_click_select(self):
+        """Switch proxy FIRST, then look for and click Select button"""
+        try:
+            print("🔄 STEP 1: Switching proxy BEFORE Select step...")
+            
+            # Save current session data
+            cookies_before = self.driver.get_cookies() if self.driver else []
+            current_url = self.driver.current_url if self.driver else ""
+            
+            print(f"📦 Saving {len(cookies_before)} cookies before proxy switch")
+            print(f"📍 Current URL: {current_url}")
+            
+            # Get next proxy
+            new_proxy = self.get_next_proxy()
+            if not new_proxy:
+                print("❌ No more proxies available")
+                return False
+            
+            print(f"🔧 Switching to proxy: {new_proxy['host']} BEFORE Select step")
+            
+            # Quit current driver
+            if self.driver:
+                self.driver.quit()
+            
+            time.sleep(2)
+            
+            # Create new driver with fresh proxy
+            self.driver = self.create_driver_with_proxy(new_proxy)
+            if not self.driver:
+                print("❌ Failed to create new driver")
+                return False
+            
+            self.wait = WebDriverWait(self.driver, 20)
+            self.current_proxy = new_proxy
+            
+            print("🔄 STEP 2: Navigating to Select page with new proxy...")
+            
+            # Navigate to travel-groups page
+            target_url = "https://visas-de.tlscontact.com/en-us/travel-groups"
+            self.driver.get(target_url)
+            time.sleep(3)
+            
+            # Restore cookies
+            for cookie in cookies_before:
+                try:
+                    self.driver.add_cookie(cookie)
+                except:
+                    pass
+            
+            # Refresh to apply cookies
+            self.driver.refresh()
+            time.sleep(5)
+            
+            # Check if page loaded successfully
+            current_url = self.driver.current_url
+            print(f"📍 After proxy switch and navigation: {current_url}")
+            
+            if self.is_blocked():
+                print(f"🚫 Blocked with new proxy {new_proxy['host']}")
+                return False
+            
+            print("✅ Successfully switched proxy and navigated to Select page!")
+            
+            print("🔄 STEP 3: Looking for Select button with new proxy...")
+            
+            # Now look for Select button with fresh IP
+            return self.find_and_click_select_button()
+            
+        except Exception as e:
+            print(f"❌ Proxy switch before Select error: {e}")
+            return False
 
+    def find_and_click_select_button(self):
+        """Find and click Select button (called after proxy switch)"""
+        try:
+            # Wait for page to load
+            time.sleep(5)
+            
+            print(f"🎯 Looking for Select button...")
+            print(f"Current URL: {self.driver.current_url}")
+            print(f"Page title: {self.driver.title}")
+            
+            # Check if blocked
+            if self.is_blocked():
+                print("🚫 Blocked on select page")
+                return False
+            
+            # Try different ways to find the select button
+            buttons = []
+            
+            try:
+                buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Select')]")
+                if buttons:
+                    print(f"✅ Found {len(buttons)} 'Select' buttons")
+                else:
+                    # Try other variations
+                    buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'select')] | //input[@value='Select'] | //a[contains(text(), 'Select')]")
+                    if buttons:
+                        print(f"✅ Found {len(buttons)} Select elements")
+            except Exception as e:
+                print(f"⚠️ Error finding Select buttons: {e}")
+            
+            # Debug: Print all clickable elements if no Select button found
+            if not buttons:
+                print("🔍 All clickable elements on page:")
+                try:
+                    all_buttons = self.driver.find_elements(By.XPATH, "//button | //input[@type='submit'] | //input[@type='button'] | //a[contains(@class, 'btn')]")
+                    for i, btn in enumerate(all_buttons[:10]):
+                        try:
+                            text = btn.text.strip()
+                            tag = btn.tag_name
+                            classes = btn.get_attribute('class')
+                            print(f"  {i+1}. <{tag}> '{text}' (class: {classes})")
+                        except:
+                            pass
+                except Exception as e:
+                    print(f"⚠️ Error getting clickable elements: {e}")
+                
+                try:
+                    self.driver.save_screenshot("/tmp/select_page_new_proxy.png")
+                    print("📸 Screenshot saved: /tmp/select_page_new_proxy.png")
+                except:
+                    pass
+                
+                print("❌ 'Select' düyməsi tapılmadı.")
+                return False
+            
+            # If we found buttons, click the first one
+            if buttons:
+                try:
+                    self.driver.execute_script("arguments[0].click();", buttons[0])
+                    time.sleep(3)
+                    print("✅ 'Select' düyməsi klikləndi (JS click)!")
+                    
+                    # Check if we were redirected successfully
+                    current_url = self.driver.current_url
+                    print(f"📍 After Select click: {current_url}")
+                    
+                    if "/workflow/service-level" in current_url or "workflow" in current_url:
+                        print("✅ Select successful - redirected to workflow page!")
+                        return True
+                    else:
+                        print(f"🤔 Select clicked but unexpected URL: {current_url}")
+                        return True  # Still consider it success if no blocking
+                        
+                except Exception as e:
+                    print(f"⚠️ Select klik xətası: {e}")
+                    return False
+            
+            return False
+            
+        except Exception as e:
+            print(f"❌ Find and click Select error: {e}")
+            return False
     def run_with_immediate_switching(self):
         """Main run method with immediate proxy switching after each successful step"""
         max_attempts = len(self.PROXY_LIST)
@@ -1261,7 +1131,7 @@ class TLSBot:
                     print("✅ Login and proxy switch successful!")
                     
                     # STEP 2: Select and immediate switch
-                    if self.click_select_and_immediate_switch():
+                    if self.switch_proxy_then_click_select():
                         print("✅ Select and proxy switch successful!")
                         
                         # STEP 3: Continue and immediate switch
@@ -1479,61 +1349,7 @@ class TLSBot:
             print(f"❌ Mid-auth proxy switch error: {e}")
             return False
 
-    def switch_proxy_and_navigate_to_select(self, cookies_before):
-        """Switch proxy immediately and navigate to Select page"""
-        try:
-            # Get next proxy
-            new_proxy = self.get_next_proxy()
-            if not new_proxy:
-                print("❌ No more proxies available")
-                return False
-            
-            print(f"🔄 Switching to proxy: {new_proxy['host']} for SELECT step")
-            
-            # Quit current driver
-            self.driver.quit()
-            time.sleep(2)
-            
-            # Create new driver with different proxy
-            self.driver = self.create_driver_with_proxy(new_proxy)
-            if not self.driver:
-                print("❌ Failed to create new driver")
-                return False
-            
-            self.wait = WebDriverWait(self.driver, 20)
-            self.current_proxy = new_proxy
-            
-            # Navigate to travel-groups page
-            target_url = "https://visas-de.tlscontact.com/en-us/travel-groups"
-            print(f"🔗 Navigating with new proxy to: {target_url}")
-            self.driver.get(target_url)
-            time.sleep(3)
-            
-            # Restore cookies
-            for cookie in cookies_before:
-                try:
-                    self.driver.add_cookie(cookie)
-                except:
-                    pass
-            
-            # Refresh to apply cookies
-            self.driver.refresh()
-            time.sleep(5)
-            
-            # Check if we're successfully on the page
-            current_url = self.driver.current_url
-            print(f"📍 After cookie restore: {current_url}")
-            
-            if self.is_blocked():
-                print("🚫 Still blocked after proxy switch")
-                return False
-            
-            print("✅ Successfully navigated with new proxy!")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Proxy switch error: {e}")
-            return False
+
 
     def click_select_and_immediate_switch(self):
         """Click Select button and immediately switch proxy"""
