@@ -1291,8 +1291,10 @@ class TLSBot:
         
         print("❌ All immediate switching attempts failed")
         return False
+
+            
     def login_and_immediate_switch(self):
-        """Login and immediately switch proxy after successful login"""
+        """Login and immediately switch proxy after clicking login but before redirect"""
         self.driver.get(self.LOGIN_URL)
         time.sleep(5)
 
@@ -1363,27 +1365,114 @@ class TLSBot:
                         
                         # Click login button
                         login_button.click()
-                        print("🔄 Login clicked - waiting for auth flow...")
+                        print("🔄 Login clicked - IMMEDIATELY switching proxy before redirect...")
                         
-                        # Wait for auth-callback
-                        time.sleep(5)
+                        # Wait just 1-2 seconds for form submission to start
+                        time.sleep(2)
                         
-                        # Check if we reached auth-callback successfully
-                        current_url = self.driver.current_url
-                        if "auth-callback" in current_url:
-                            print(f"✅ Login successful - reached: {current_url}")
-                            
-                            # IMMEDIATELY switch proxy for next step
-                            print("🚀 Login successful! Immediately switching proxy for SELECT step...")
-                            return self.switch_proxy_and_navigate_to_select(cookies_before)
-                        else:
-                            print(f"❌ Login failed - unexpected URL: {current_url}")
-                            return False
+                        # IMMEDIATELY switch proxy BEFORE redirect completes
+                        print("🚀 Switching proxy immediately after login click...")
+                        return self.switch_proxy_mid_auth_flow(cookies_before)
             
             return False
             
         except Exception as e:
             print(f"❌ Login error: {e}")
+            return False
+
+    def switch_proxy_mid_auth_flow(self, cookies_before):
+        """Switch proxy immediately during auth flow"""
+        try:
+            # Get next proxy
+            new_proxy = self.get_next_proxy()
+            if not new_proxy:
+                print("❌ No more proxies available")
+                return False
+            
+            print(f"🔄 Mid-auth switching to proxy: {new_proxy['host']}")
+            
+            # Quit current driver immediately
+            self.driver.quit()
+            time.sleep(1)  # Minimal wait
+            
+            # Create new driver with different proxy
+            self.driver = self.create_driver_with_proxy(new_proxy)
+            if not self.driver:
+                print("❌ Failed to create new driver")
+                return False
+            
+            self.wait = WebDriverWait(self.driver, 20)
+            self.current_proxy = new_proxy
+            
+            # Try multiple strategies to continue the auth flow
+            success = False
+            
+            # Strategy 1: Try direct travel-groups access
+            dashboard_urls = [
+                "https://visas-de.tlscontact.com/en-us/travel-groups",
+                "https://visas-de.tlscontact.com/en-us/dashboard",
+                "https://visas-de.tlscontact.com/en-us/"
+            ]
+            
+            for url in dashboard_urls:
+                try:
+                    print(f"🔗 Trying direct access to: {url}")
+                    self.driver.get(url)
+                    time.sleep(3)
+                    
+                    # Restore cookies from before login
+                    for cookie in cookies_before:
+                        try:
+                            self.driver.add_cookie(cookie)
+                        except:
+                            pass
+                    
+                    # Refresh to apply cookies
+                    self.driver.refresh()
+                    time.sleep(5)
+                    
+                    current_url = self.driver.current_url
+                    page_source = self.driver.page_source.lower()
+                    
+                    print(f"📍 After cookie restore: {current_url}")
+                    
+                    # Check for success indicators
+                    if self.is_blocked():
+                        print(f"🚫 Still blocked with {new_proxy['host']} at {url}")
+                        continue
+                    elif ("travel" in current_url.lower() or 
+                        "dashboard" in current_url.lower() or
+                        "select" in page_source):
+                        print("✅ Successfully accessed with new proxy!")
+                        success = True
+                        break
+                    else:
+                        print(f"🤔 Uncertain status with {url}")
+                        # Try next URL
+                        
+                except Exception as e:
+                    print(f"⚠️ Error trying {url}: {e}")
+                    continue
+            
+            # Strategy 2: If direct access failed, try fresh auth flow
+            if not success:
+                print("🔄 Direct access failed, trying fresh login with new proxy...")
+                
+                # Try a fresh login with the new proxy
+                self.driver.get(self.LOGIN_URL)
+                time.sleep(5)
+                
+                if not self.is_blocked():
+                    print("✅ Fresh login page accessible with new proxy")
+                    return True  # Return True to continue with SELECT step
+                else:
+                    print("🚫 Fresh login also blocked")
+                    return False
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Mid-auth proxy switch error: {e}")
             return False
 
     def switch_proxy_and_navigate_to_select(self, cookies_before):
