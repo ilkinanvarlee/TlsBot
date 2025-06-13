@@ -55,6 +55,10 @@ class TLSBot:
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--ignore-certificate-errors")
+        chrome_options.add_argument("--ignore-ssl-errors")
+        chrome_options.add_argument("--allow-running-insecure-content")
         
         # Fix user data directory issue
         import tempfile
@@ -63,23 +67,88 @@ class TLSBot:
         chrome_options.add_argument(f"--user-data-dir={temp_dir}/{uuid.uuid4()}")
         chrome_options.add_argument("--remote-debugging-port=0")
         
-        # Add proxy with debug output
-        if self.PROXY_HOST and self.PROXY_PORT:
+        # Create proxy auth extension
+        if self.PROXY_HOST and self.PROXY_PORT and self.PROXY_USER and self.PROXY_PASS:
             proxy_host = self.PROXY_HOST.strip()
             proxy_port = self.PROXY_PORT.strip()
             proxy_user = self.PROXY_USER.strip()
             proxy_pass = self.PROXY_PASS.strip()
             
-            if proxy_user and proxy_pass:
-                proxy_string = f"{proxy_user}:{proxy_pass}@{proxy_host}:{proxy_port}"
-                chrome_options.add_argument(f"--proxy-server=http://{proxy_string}")
-                print(f"🔧 Using authenticated proxy: http://{proxy_user}:***@{proxy_host}:{proxy_port}")
-            else:
-                proxy_string = f"{proxy_host}:{proxy_port}"
-                chrome_options.add_argument(f"--proxy-server=http://{proxy_string}")
-                print(f"🔧 Using proxy: http://{proxy_string}")
-        else:
-            print("❌ No proxy configured")
+            # Create a simple proxy extension
+            manifest_json = """
+            {
+                "version": "1.0.0",
+                "manifest_version": 2,
+                "name": "Chrome Proxy",
+                "permissions": [
+                    "proxy",
+                    "tabs",
+                    "unlimitedStorage",
+                    "storage",
+                    "<all_urls>",
+                    "webRequest",
+                    "webRequestBlocking"
+                ],
+                "background": {
+                    "scripts": ["background.js"]
+                },
+                "minimum_chrome_version":"22.0.0"
+            }
+            """
+            
+            background_js = f"""
+            var config = {{
+                mode: "fixed_servers",
+                rules: {{
+                    singleProxy: {{
+                        scheme: "http",
+                        host: "{proxy_host}",
+                        port: parseInt({proxy_port})
+                    }},
+                    bypassList: ["localhost"]
+                }}
+            }};
+
+            chrome.proxy.settings.set({{value: config, scope: "regular"}}, function() {{}});
+
+            function callbackFn(details) {{
+                return {{
+                    authCredentials: {{
+                        username: "{proxy_user}",
+                        password: "{proxy_pass}"
+                    }}
+                }};
+            }}
+
+            chrome.webRequest.onAuthRequired.addListener(
+                callbackFn,
+                {{urls: ["<all_urls>"]}},
+                ['blocking']
+            );
+            """
+            
+            # Create extension directory
+            import os
+            extension_dir = f"{temp_dir}/proxy_auth_extension"
+            os.makedirs(extension_dir, exist_ok=True)
+            
+            # Write extension files
+            with open(f"{extension_dir}/manifest.json", "w") as f:
+                f.write(manifest_json)
+            
+            with open(f"{extension_dir}/background.js", "w") as f:
+                f.write(background_js)
+            
+            # Load extension
+            chrome_options.add_argument(f"--load-extension={extension_dir}")
+            print(f"🔧 Created proxy auth extension at: {extension_dir}")
+        
+        # Alternative: Try without auth first
+        elif self.PROXY_HOST and self.PROXY_PORT:
+            proxy_host = self.PROXY_HOST.strip()
+            proxy_port = self.PROXY_PORT.strip()
+            chrome_options.add_argument(f"--proxy-server=http://{proxy_host}:{proxy_port}")
+            print(f"🔧 Using proxy without auth: http://{proxy_host}:{proxy_port}")
         
         # Anti-detection measures
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
@@ -94,26 +163,20 @@ class TLSBot:
         import random
         chosen_ua = random.choice(user_agents)
         chrome_options.add_argument(f"--user-agent={chosen_ua}")
-        print(f"🌐 Using User-Agent: {chosen_ua}")
         
         try:
             driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
-            # Test if proxy is working by checking IP
-            try:
-                driver.get("https://httpbin.org/ip")
-                time.sleep(3)
-                page_text = driver.find_element(By.TAG_NAME, "body").text
-                print(f"🌍 Current IP: {page_text}")
-            except Exception as e:
-                print(f"⚠️ IP check failed: {e}")
+            # Wait a moment for extension to load
+            time.sleep(3)
             
             return driver
             
         except Exception as e:
             print(f"❌ Driver setup failed: {e}")
             raise
+
     def add_stealth_measures(self):
         """Add additional anti-detection measures"""
         # Random delays between actions
