@@ -26,12 +26,16 @@ class TLSBot:
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     NO_SLOT_CHANNEL_ID = os.getenv("NO_SLOT_CHANNEL_ID")
     CALENDAR_CHANNEL_ID = os.getenv("CALENDAR_CHANNEL_ID")
+    
+    # Add proxy settings
+    PROXY_HOST = 'https://proxy2.webshare.io/'  # e.g., "proxy.example.com"
+    PROXY_PORT = '198.23.239.134'  # e.g., "8080"
+    PROXY_USER = 'dfbhwtck ' # if auth required
+    PROXY_PASS = '16lu6q7n6w2m ' # if auth required
 
-
-    def __init__(self):
+        def __init__(self):
         self.driver = self.setup_driver()
         self.wait = WebDriverWait(self.driver, 20)
-
 
     def setup_driver(self):
         chrome_options = Options()
@@ -39,8 +43,62 @@ class TLSBot:
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--start-maximized")
-        return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-
+        
+        # Add residential proxy or rotating proxy
+        if self.PROXY_HOST and self.PROXY_PORT:
+            # Extract hostname from URL if it contains protocol
+            proxy_host = self.PROXY_HOST
+            if proxy_host.startswith('http://') or proxy_host.startswith('https://'):
+                from urllib.parse import urlparse
+                parsed = urlparse(proxy_host)
+                proxy_host = parsed.hostname
+            
+            if self.PROXY_USER and self.PROXY_PASS:
+                proxy = f"{self.PROXY_USER}:{self.PROXY_PASS}@{proxy_host}:{self.PROXY_PORT}"
+            else:
+                proxy = f"{proxy_host}:{self.PROXY_PORT}"
+            
+            chrome_options.add_argument(f"--proxy-server=http://{proxy}")
+        
+        # Anti-detection measures
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        
+        # User agent rotation
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+        ]
+        import random
+        chrome_options.add_argument(f"--user-agent={random.choice(user_agents)}")
+        
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+        
+        # Execute script to hide automation
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
+        return driver
+    
+    def add_stealth_measures(self):
+        """Add additional anti-detection measures"""
+        # Random delays between actions
+        import random
+        time.sleep(random.uniform(2, 5))
+        
+        # Simulate human-like mouse movements
+        try:
+            from selenium.webdriver.common.action_chains import ActionChains
+            actions = ActionChains(self.driver)
+            # Move mouse to random positions
+            for _ in range(3):
+                x = random.randint(100, 500)
+                y = random.randint(100, 400)
+                actions.move_by_offset(x, y).perform()
+                time.sleep(random.uniform(0.5, 1.5))
+        except:
+            pass
 
     def login(self):
         self.driver.get(self.LOGIN_URL)
