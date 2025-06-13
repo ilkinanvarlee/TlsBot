@@ -50,55 +50,55 @@ class TLSBot:
             'pass': '16lu6q7n6w2m'
         },
         {
-            'host': '45.152.188.165',  # Croatia - Zagreb
+            'host': '207.244.217.165',  # Croatia - Zagreb
             'port': '6712',
             'user': 'dfbhwtck',
             'pass': '16lu6q7n6w2m'
         },
         {
-            'host': '198.23.239.27',  # United States - Bloomingdale
+            'host': '107.172.163.27',  # United States - Bloomingdale
             'port': '6543',
             'user': 'dfbhwtck',
             'pass': '16lu6q7n6w2m'
         },
         {
-            'host': '198.23.239.75',  # United States - Buffalo
+            'host': '23.94.138.75',  # United States - Buffalo
             'port': '6349',
             'user': 'dfbhwtck',
             'pass': '16lu6q7n6w2m'
         },
         {
-            'host': '198.23.239.159',  # United States - Dallas
+            'host': '216.10.27.159',  # United States - Dallas
             'port': '6837',
             'user': 'dfbhwtck',
             'pass': '16lu6q7n6w2m'
         },
         {
-            'host': '198.23.239.84',  # United States - Orem
+            'host': '136.0.207.84',  # United States - Orem
             'port': '6661',
             'user': 'dfbhwtck',
             'pass': '16lu6q7n6w2m'
         },
         {
-            'host': '198.23.239.149',  # United States - Greenlawn
+            'host': '64.64.118.149',  # United States - Greenlawn
             'port': '6732',
             'user': 'dfbhwtck',
             'pass': '16lu6q7n6w2m'
         },
         {
-            'host': '198.23.239.93',  # United States - Ashburn
+            'host': '142.147.128.93',  # United States - Ashburn
             'port': '6593',
             'user': 'dfbhwtck',
             'pass': '16lu6q7n6w2m'
         },
         {
-            'host': '198.23.239.125',  # United States - Dallas
+            'host': '104.239.105.125',  # United States - Dallas
             'port': '6655',
             'user': 'dfbhwtck',
             'pass': '16lu6q7n6w2m'
         },
         {
-            'host': '198.23.239.1',  # United States - Ashburn
+            'host': '173.0.9.70',  # United States - Ashburn
             'port': '5653',
             'user': 'dfbhwtck',
             'pass': '16lu6q7n6w2m'
