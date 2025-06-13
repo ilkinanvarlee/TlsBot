@@ -33,7 +33,19 @@ class TLSBot:
     PROXY_USER = 'dfbhwtck ' # if auth required
     PROXY_PASS = '16lu6q7n6w2m ' # if auth required
 
+    def cleanup_chrome_processes(self):
+        """Kill any existing Chrome processes"""
+        import subprocess
+        try:
+            subprocess.run(["pkill", "-f", "chrome"], check=False)
+            subprocess.run(["pkill", "-f", "chromium"], check=False)
+            subprocess.run(["pkill", "-f", "chromedriver"], check=False)
+        except Exception as e:
+            print(f"Cleanup warning: {e}")
+
     def __init__(self):
+        self.cleanup_chrome_processes()  # Clean up before starting
+        time.sleep(2)  # Wait a moment
         self.driver = self.setup_driver()
         self.wait = WebDriverWait(self.driver, 20)
 
@@ -43,6 +55,15 @@ class TLSBot:
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--start-maximized")
+        
+        # Fix user data directory issue
+        import tempfile
+        import uuid
+        temp_dir = tempfile.mkdtemp()
+        chrome_options.add_argument(f"--user-data-dir={temp_dir}/{uuid.uuid4()}")
+        chrome_options.add_argument("--remote-debugging-port=0")
+        chrome_options.add_argument("--disable-background-timer-throttling")
+        chrome_options.add_argument("--disable-renderer-backgrounding")
         
         # Add residential proxy or rotating proxy
         if self.PROXY_HOST and self.PROXY_PORT:
@@ -99,7 +120,6 @@ class TLSBot:
                 time.sleep(random.uniform(0.5, 1.5))
         except:
             pass
-
     def login(self):
         self.driver.get(self.LOGIN_URL)
         time.sleep(3)
