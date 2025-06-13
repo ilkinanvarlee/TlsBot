@@ -18,6 +18,20 @@ import os
 load_dotenv()
 
 
+
+
+import random
+import tempfile
+import uuid
+import subprocess
+
+
+
+
+
+
+
+
 class TLSBot:
     
     EMAIL = os.getenv("EMAIL")
@@ -27,15 +41,82 @@ class TLSBot:
     NO_SLOT_CHANNEL_ID = os.getenv("NO_SLOT_CHANNEL_ID")
     CALENDAR_CHANNEL_ID = os.getenv("CALENDAR_CHANNEL_ID")
     
-    # Add proxy settings
-    PROXY_HOST = '198.23.239.134'  
-    PROXY_PORT = '6540'  
-    PROXY_USER = 'dfbhwtck' 
-    PROXY_PASS = '16lu6q7n6w2m'
+    # Multiple proxy endpoints from your Webshare account
+    PROXY_LIST = [
+        {
+            'host': '198.23.239.134',  # United States - Buffalo (Current)
+            'port': '6540',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        },
+        {
+            'host': '45.152.188.165',  # Croatia - Zagreb
+            'port': '6712',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        },
+        {
+            'host': '198.23.239.27',  # United States - Bloomingdale
+            'port': '6543',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        },
+        {
+            'host': '198.23.239.75',  # United States - Buffalo
+            'port': '6349',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        },
+        {
+            'host': '198.23.239.159',  # United States - Dallas
+            'port': '6837',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        },
+        {
+            'host': '198.23.239.84',  # United States - Orem
+            'port': '6661',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        },
+        {
+            'host': '198.23.239.149',  # United States - Greenlawn
+            'port': '6732',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        },
+        {
+            'host': '198.23.239.93',  # United States - Ashburn
+            'port': '6593',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        },
+        {
+            'host': '198.23.239.125',  # United States - Dallas
+            'port': '6655',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        },
+        {
+            'host': '198.23.239.1',  # United States - Ashburn
+            'port': '5653',
+            'user': 'dfbhwtck',
+            'pass': '16lu6q7n6w2m'
+        }
+    ]
+
+    def __init__(self):
+        self.cleanup_chrome_processes()
+        time.sleep(2)
+        self.current_proxy_index = 0
+        self.max_retries = len(self.PROXY_LIST)
+        self.driver = None
+        self.wait = None
+        self.current_proxy = None
+        self.setup_driver_with_rotation()
 
     def cleanup_chrome_processes(self):
         """Kill any existing Chrome processes"""
-        import subprocess
         try:
             subprocess.run(["pkill", "-f", "chrome"], check=False)
             subprocess.run(["pkill", "-f", "chromium"], check=False)
@@ -43,55 +124,157 @@ class TLSBot:
         except Exception as e:
             print(f"Cleanup warning: {e}")
 
-    def __init__(self):
-        self.cleanup_chrome_processes()  # Clean up before starting
-        time.sleep(2)  # Wait a moment
-        self.driver = self.setup_driver()
-        self.wait = WebDriverWait(self.driver, 20)
+    def get_next_proxy(self):
+        """Get the next proxy in rotation"""
+        if not self.PROXY_LIST:
+            return None
+        proxy = self.PROXY_LIST[self.current_proxy_index % len(self.PROXY_LIST)]
+        self.current_proxy_index += 1
+        return proxy
 
-    def setup_driver(self):
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-web-security")
-        chrome_options.add_argument("--ignore-certificate-errors")
-        chrome_options.add_argument("--ignore-ssl-errors")
-        chrome_options.add_argument("--allow-running-insecure-content")
-        
-        # Fix user data directory issue
-        import tempfile
-        import uuid
-        temp_dir = tempfile.mkdtemp()
-        chrome_options.add_argument(f"--user-data-dir={temp_dir}/{uuid.uuid4()}")
-        chrome_options.add_argument("--remote-debugging-port=0")
-        
-        # Create proxy auth extension
-        if self.PROXY_HOST and self.PROXY_PORT and self.PROXY_USER and self.PROXY_PASS:
-            proxy_host = self.PROXY_HOST.strip()
-            proxy_port = self.PROXY_PORT.strip()
-            proxy_user = self.PROXY_USER.strip()
-            proxy_pass = self.PROXY_PASS.strip()
+    def test_proxy(self, proxy):
+        """Test if a proxy is working"""
+        try:
+            print(f"🧪 Testing proxy {proxy['host']}:{proxy['port']}")
+            proxy_url = f"http://{proxy['user']}:{proxy['pass']}@{proxy['host']}:{proxy['port']}"
+            proxies = {'http': proxy_url, 'https': proxy_url}
             
-            # Create a simple proxy extension
+            response = requests.get('https://httpbin.org/ip', proxies=proxies, timeout=10)
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"✅ Proxy working - IP: {result.get('origin', 'unknown')}")
+                return True
+            else:
+                print(f"❌ Proxy test failed - Status: {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"❌ Proxy test error: {e}")
+            return False
+
+    def setup_driver_with_rotation(self):
+        """Setup driver with proxy rotation"""
+        for attempt in range(self.max_retries):
+            try:
+                proxy = self.get_next_proxy()
+                if not proxy:
+                    print("❌ No proxies available")
+                    break
+                
+                print(f"🔄 Attempt {attempt + 1}/{self.max_retries} - Trying proxy {proxy['host']}")
+                
+                # Test proxy first
+                if not self.test_proxy(proxy):
+                    print(f"⚠️ Proxy {proxy['host']} failed test, trying next...")
+                    continue
+                
+                # Setup driver with this proxy
+                self.driver = self.create_driver_with_proxy(proxy)
+                if self.driver:
+                    self.wait = WebDriverWait(self.driver, 20)
+                    self.current_proxy = proxy
+                    
+                    # Test driver with a simple request
+                    if self.test_driver():
+                        print(f"✅ Successfully setup driver with proxy {proxy['host']}")
+                        return True
+                    else:
+                        print(f"❌ Driver test failed with proxy {proxy['host']}")
+                        if self.driver:
+                            self.driver.quit()
+                        continue
+            except Exception as e:
+                print(f"❌ Error setting up driver: {e}")
+                if self.driver:
+                    try:
+                        self.driver.quit()
+                    except:
+                        pass
+                continue
+        
+        print("❌ Failed to setup driver with any proxy")
+        raise Exception("All proxies failed")
+
+    def create_driver_with_proxy(self, proxy):
+        """Create Chrome driver with specific proxy"""
+        try:
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-web-security")
+            chrome_options.add_argument("--ignore-certificate-errors")
+            chrome_options.add_argument("--ignore-ssl-errors")
+            chrome_options.add_argument("--allow-running-insecure-content")
+            
+            # Randomize window size
+            width = random.randint(1200, 1920)
+            height = random.randint(800, 1080)
+            chrome_options.add_argument(f"--window-size={width},{height}")
+            
+            # User data directory
+            temp_dir = tempfile.mkdtemp()
+            chrome_options.add_argument(f"--user-data-dir={temp_dir}/{uuid.uuid4()}")
+            chrome_options.add_argument("--remote-debugging-port=0")
+            
+            # Create proxy extension
+            extension_dir = self.create_proxy_extension(proxy, temp_dir)
+            if extension_dir:
+                chrome_options.add_argument(f"--load-extension={extension_dir}")
+                print(f"🔧 Created proxy auth extension")
+            
+            # Anti-detection measures
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+            # Random user agent
+            user_agents = [
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+            ]
+            chosen_ua = random.choice(user_agents)
+            chrome_options.add_argument(f"--user-agent={chosen_ua}")
+            
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+            
+            # Execute stealth scripts
+            stealth_scripts = [
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})",
+                "Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})",
+                "Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})",
+                "window.chrome = { runtime: {} }"
+            ]
+            
+            for script in stealth_scripts:
+                try:
+                    driver.execute_script(script)
+                except:
+                    pass
+            
+            time.sleep(3)  # Wait for extension to load
+            return driver
+            
+        except Exception as e:
+            print(f"❌ Failed to create driver: {e}")
+            return None
+
+    def create_proxy_extension(self, proxy, temp_dir):
+        """Create proxy authentication extension"""
+        try:
             manifest_json = """
             {
                 "version": "1.0.0",
                 "manifest_version": 2,
-                "name": "Chrome Proxy",
+                "name": "Proxy Auth",
                 "permissions": [
-                    "proxy",
-                    "tabs",
-                    "unlimitedStorage",
-                    "storage",
-                    "<all_urls>",
-                    "webRequest",
-                    "webRequestBlocking"
+                    "proxy", "tabs", "unlimitedStorage", "storage", "<all_urls>",
+                    "webRequest", "webRequestBlocking"
                 ],
-                "background": {
-                    "scripts": ["background.js"]
-                },
+                "background": {"scripts": ["background.js"]},
                 "minimum_chrome_version":"22.0.0"
             }
             """
@@ -102,8 +285,8 @@ class TLSBot:
                 rules: {{
                     singleProxy: {{
                         scheme: "http",
-                        host: "{proxy_host}",
-                        port: parseInt({proxy_port})
+                        host: "{proxy['host']}",
+                        port: parseInt({proxy['port']})
                     }},
                     bypassList: ["localhost"]
                 }}
@@ -111,96 +294,89 @@ class TLSBot:
 
             chrome.proxy.settings.set({{value: config, scope: "regular"}}, function() {{}});
 
-            function callbackFn(details) {{
-                return {{
-                    authCredentials: {{
-                        username: "{proxy_user}",
-                        password: "{proxy_pass}"
-                    }}
-                }};
-            }}
-
             chrome.webRequest.onAuthRequired.addListener(
-                callbackFn,
+                function(details) {{
+                    return {{
+                        authCredentials: {{
+                            username: "{proxy['user']}",
+                            password: "{proxy['pass']}"
+                        }}
+                    }};
+                }},
                 {{urls: ["<all_urls>"]}},
                 ['blocking']
             );
             """
             
-            # Create extension directory
-            import os
-            extension_dir = f"{temp_dir}/proxy_auth_extension"
+            extension_dir = f"{temp_dir}/proxy_extension_{random.randint(1000, 9999)}"
             os.makedirs(extension_dir, exist_ok=True)
             
-            # Write extension files
             with open(f"{extension_dir}/manifest.json", "w") as f:
                 f.write(manifest_json)
             
             with open(f"{extension_dir}/background.js", "w") as f:
                 f.write(background_js)
             
-            # Load extension
-            chrome_options.add_argument(f"--load-extension={extension_dir}")
-            print(f"🔧 Created proxy auth extension at: {extension_dir}")
-        
-        # Alternative: Try without auth first
-        elif self.PROXY_HOST and self.PROXY_PORT:
-            proxy_host = self.PROXY_HOST.strip()
-            proxy_port = self.PROXY_PORT.strip()
-            chrome_options.add_argument(f"--proxy-server=http://{proxy_host}:{proxy_port}")
-            print(f"🔧 Using proxy without auth: http://{proxy_host}:{proxy_port}")
-        
-        # Anti-detection measures
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        # User agent
-        user_agents = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-        ]
-        import random
-        chosen_ua = random.choice(user_agents)
-        chrome_options.add_argument(f"--user-agent={chosen_ua}")
-        
-        try:
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            # Wait a moment for extension to load
-            time.sleep(3)
-            
-            return driver
-            
+            return extension_dir
         except Exception as e:
-            print(f"❌ Driver setup failed: {e}")
-            raise
+            print(f"❌ Failed to create proxy extension: {e}")
+            return None
 
-    def add_stealth_measures(self):
-        """Add additional anti-detection measures"""
-        # Random delays between actions
-        import random
-        time.sleep(random.uniform(2, 5))
-        
-        # Simulate human-like mouse movements
+    def test_driver(self):
+        """Test if driver is working properly"""
         try:
-            from selenium.webdriver.common.action_chains import ActionChains
-            actions = ActionChains(self.driver)
-            # Move mouse to random positions
-            for _ in range(3):
-                x = random.randint(100, 500)
-                y = random.randint(100, 400)
-                actions.move_by_offset(x, y).perform()
-                time.sleep(random.uniform(0.5, 1.5))
+            self.driver.get("https://httpbin.org/ip")
+            time.sleep(3)
+            if "httpbin" in self.driver.title.lower() or "origin" in self.driver.page_source:
+                return True
+            else:
+                return False
+        except Exception as e:
+            print(f"❌ Driver test error: {e}")
+            return False
+
+    def rotate_proxy_if_blocked(self):
+        """Rotate to next proxy if current one is blocked"""
+        print("🔄 Rotating proxy due to blocking...")
+        
+        if self.driver:
+            try:
+                self.driver.quit()
+            except:
+                pass
+        
+        # Try next proxy
+        self.setup_driver_with_rotation()
+
+    def is_blocked(self):
+        """Check if current page shows blocking"""
+        try:
+            page_source = self.driver.page_source.lower()
+            current_url = self.driver.current_url.lower()
+            
+            blocking_indicators = [
+                "error 1005",
+                "access denied",
+                "banned",
+                "cloudflare",
+                "ray id:",
+                "please enable cookies"
+            ]
+            
+            return any(indicator in page_source for indicator in blocking_indicators)
         except:
-            pass
+            return False
+
     def login(self):
         self.driver.get(self.LOGIN_URL)
         time.sleep(5)
 
         try:
-            # Debug: Print initial page info
+            # Check if blocked before proceeding
+            if self.is_blocked():
+                print("🚫 Blocked on login page")
+                return False
+
             print(f"Initial page title: {self.driver.title}")
             print(f"Initial URL: {self.driver.current_url}")
             
@@ -260,18 +436,20 @@ class TLSBot:
                         
                         # Wait for auth-callback
                         try:
-                            WebDriverWait(self.driver, 10).until(
-                                EC.url_contains("auth-callback")
-                            )
+                            WebDriverWait(self.driver, 10).until(EC.url_contains("auth-callback"))
                             print(f"📍 Reached auth-callback: {self.driver.current_url}")
                         except:
                             print("⚠️ Didn't reach auth-callback")
                         
-                        # Now wait for final redirect to dashboard
-                        print("🔄 Waiting for final redirect to dashboard...")
-                        time.sleep(10)  # Give time for redirect
+                        # Check if blocked after login
+                        if self.is_blocked():
+                            print("🚫 Blocked after login")
+                            return False
                         
-                        # Check multiple possible success indicators
+                        # Wait for final redirect
+                        print("🔄 Waiting for final redirect to dashboard...")
+                        time.sleep(10)
+                        
                         current_url = self.driver.current_url
                         page_title = self.driver.title
                         
@@ -289,7 +467,7 @@ class TLSBot:
                             "appointment" in page_title.lower()
                         ]
                         
-                        # Check for Select buttons (indicates we're on the right page)
+                        # Check for Select buttons
                         has_select_button = False
                         try:
                             select_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Select')] | //a[contains(text(), 'Select')] | //input[@value='Select']")
@@ -299,56 +477,11 @@ class TLSBot:
                         except:
                             pass
                         
-                        # Check for error indicators
-                        error_indicators = [
-                            "error" in current_url.lower(),
-                            "login" in current_url.lower() and "auth-callback" not in current_url.lower(),
-                            "invalid" in page_title.lower(),
-                            "error" in page_title.lower()
-                        ]
-                        
-                        # If still on auth-callback, try to find a continue/redirect element
-                        if "auth-callback" in current_url:
-                            print("🔄 Still on auth-callback, looking for redirect elements...")
-                            try:
-                                # Look for any auto-redirect elements or continue buttons
-                                continue_elements = self.driver.find_elements(By.XPATH, 
-                                    "//a[contains(text(), 'Continue')] | //button[contains(text(), 'Continue')] | " +
-                                    "//a[contains(text(), 'Proceed')] | //button[contains(text(), 'Proceed')] | " +
-                                    "//a[contains(@href, 'travel')] | //a[contains(@href, 'dashboard')]"
-                                )
-                                if continue_elements:
-                                    print(f"🔗 Found {len(continue_elements)} potential redirect elements")
-                                    # Click the first one
-                                    self.driver.execute_script("arguments[0].click();", continue_elements[0])
-                                    time.sleep(5)
-                                    print(f"📍 After click URL: {self.driver.current_url}")
-                            except Exception as e:
-                                print(f"⚠️ Error looking for redirect elements: {e}")
-                            
-                            # Check page source for auto-redirect script
-                            try:
-                                page_source = self.driver.page_source
-                                if "window.location" in page_source or "redirect" in page_source.lower():
-                                    print("🔄 Page contains redirect script, waiting...")
-                                    time.sleep(10)
-                                    print(f"📍 After waiting URL: {self.driver.current_url}")
-                            except:
-                                pass
-                        
-                        # Final verification
-                        final_url = self.driver.current_url
-                        final_title = self.driver.title
-                        
-                        if any(success_indicators) or has_select_button or "travel" in final_url.lower():
+                        if any(success_indicators) or has_select_button or "travel" in current_url.lower():
                             print("✅ Login appears successful!")
                             return True
-                        elif any(error_indicators):
-                            print("❌ Login failed - error detected")
-                            return False
-                        elif "auth-callback" in final_url:
+                        elif "auth-callback" in current_url:
                             print("⚠️ Still on auth-callback page - login may be incomplete")
-                            # Save screenshot for debugging
                             try:
                                 self.driver.save_screenshot("/tmp/auth_callback_stuck.png")
                                 print("📸 Screenshot saved: /tmp/auth_callback_stuck.png")
@@ -366,8 +499,56 @@ class TLSBot:
             return False
 
     def click_first_select(self):
-
-        buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Select')]")
+        # Wait longer for page to load after login
+        time.sleep(10)
+        
+        print(f"🔍 Looking for Select button...")
+        print(f"Current URL: {self.driver.current_url}")
+        print(f"Page title: {self.driver.title}")
+        
+        # Check if blocked
+        if self.is_blocked():
+            print("🚫 Blocked on select page")
+            return False
+        
+        # Try different ways to find the select button
+        buttons = []
+        
+        try:
+            buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Select')]")
+            if buttons:
+                print(f"✅ Found {len(buttons)} 'Select' buttons")
+            else:
+                # Try other variations
+                buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'select')] | //input[@value='Select'] | //a[contains(text(), 'Select')]")
+                if buttons:
+                    print(f"✅ Found {len(buttons)} Select elements")
+        except Exception as e:
+            print(f"⚠️ Error finding Select buttons: {e}")
+        
+        # Debug: Print all clickable elements if no Select button found
+        if not buttons:
+            print("🔍 All clickable elements on page:")
+            try:
+                all_buttons = self.driver.find_elements(By.XPATH, "//button | //input[@type='submit'] | //input[@type='button'] | //a[contains(@class, 'btn')]")
+                for i, btn in enumerate(all_buttons[:10]):
+                    try:
+                        text = btn.text.strip()
+                        tag = btn.tag_name
+                        classes = btn.get_attribute('class')
+                        print(f"  {i+1}. <{tag}> '{text}' (class: {classes})")
+                    except:
+                        pass
+            except Exception as e:
+                print(f"⚠️ Error getting clickable elements: {e}")
+            
+            try:
+                self.driver.save_screenshot("/tmp/select_page.png")
+                print("📸 Screenshot saved: /tmp/select_page.png")
+            except:
+                pass
+        
+        # If we found buttons, try to click the first one
         if buttons:
             try:
                 self.driver.execute_script("arguments[0].click();", buttons[0])
@@ -376,9 +557,9 @@ class TLSBot:
                 return True
             except Exception as e:
                 print(f"⚠️ Select klik xətası: {e}")
+        
         print("❌ 'Select' düyməsi tapılmadı.")
         return False
-
 
     def click_continue(self):
         try:
@@ -391,11 +572,10 @@ class TLSBot:
             print(f"❌ 'Continue' kliklənmədi: {e}")
             return False
 
-
     def print_appointment_info(self):
         try:
             body_text = self.driver.find_element(By.TAG_NAME, "body").text
-            start_text = "We currently don’t have any appointment slots available."
+            start_text = "We currently don't have any appointment slots available."
             end_text = "as it is frequently updated with newly available slots."
 
             if start_text in body_text and end_text in body_text:
@@ -422,7 +602,6 @@ class TLSBot:
         except Exception as e:
             print(f"❌ Məlumatlar götürülərkən xəta baş verdi: {e}")
 
-
     def wait_final_page(self):
         try:
             self.wait.until(EC.url_contains("appointment-booking"))
@@ -432,21 +611,44 @@ class TLSBot:
         except Exception as e:
             print(f"❌ Son səhifəyə keçid alınmadı: {e}")
 
+    def run_with_rotation(self):
+        """Run the bot with proxy rotation on failures"""
+        max_rotation_attempts = len(self.PROXY_LIST) * 2
+        
+        for rotation_attempt in range(max_rotation_attempts):
+            try:
+                print(f"🚀 Bot run attempt {rotation_attempt + 1}")
+                
+                if self.login():
+                    if self.click_first_select():
+                        if self.click_continue():
+                            self.wait_final_page()
+                            return True  # Success!
+                        
+                # Check if it's a blocking issue
+                if self.is_blocked():
+                    print("🚫 Detected blocking, rotating proxy...")
+                    self.rotate_proxy_if_blocked()
+                    continue
+                else:
+                    print("❌ Failed for other reasons")
+                    break
+                    
+            except Exception as e:
+                print(f"⚠️ Bot run error: {e}")
+                if self.is_blocked() or "proxy" in str(e).lower() or "connection" in str(e).lower():
+                    print("🔄 Connection issue, rotating proxy...")
+                    self.rotate_proxy_if_blocked()
+                    continue
+                else:
+                    break
+        
+        print("❌ All rotation attempts failed")
+        return False
 
     def run(self):
-        try:
-            if self.login():
-                if self.click_first_select():
-                    if self.click_continue():
-                        self.wait_final_page()
-        except Exception as e:
-            print(f"⚠️ Bot çalışarkən istisna: {e}")
-        finally:
-            try:
-                self.driver.quit()
-            except Exception:
-                print(f"⚠️ Driver bağlanarkən xəta: {e}")
-
+        """Original run method - now calls run_with_rotation"""
+        return self.run_with_rotation()
 
     def send_telegram_message(self, chat_id, message):
         url = f"https://api.telegram.org/bot{self.TELEGRAM_TOKEN}/sendMessage"
@@ -464,8 +666,6 @@ class TLSBot:
                 print(f"❌ Telegram xətası: {response.text}")
         except Exception as e:
             print(f"❌ Telegram bildirişi xətası: {e}")
-
-
 def main():
     bot = TLSBot()
     bot.run()
