@@ -854,10 +854,290 @@ class TLSBot:
         
         print("❌ All rotation attempts failed")
         return False
+    
+    def rotate_proxy_for_step(self, step_name):
+        """Rotate proxy before each major step"""
+        try:
+            print(f"🔄 Rotating proxy for step: {step_name}")
+            
+            # Get current page state
+            current_url = self.driver.current_url if self.driver else ""
+            cookies = self.driver.get_cookies() if self.driver else []
+            
+            print(f"📦 Saving {len(cookies)} cookies for {step_name}")
+            
+            # Close current driver
+            if self.driver:
+                self.driver.quit()
+            
+            time.sleep(2)
+            
+            # Get next proxy
+            new_proxy = self.get_next_proxy()
+            if not new_proxy:
+                print("❌ No more proxies available")
+                return False
+            
+            print(f"🔧 Setting up new proxy: {new_proxy['host']} for {step_name}")
+            
+            # Create new driver
+            self.driver = self.create_driver_with_proxy(new_proxy)
+            if not self.driver:
+                print("❌ Failed to create new driver")
+                return False
+            
+            self.wait = WebDriverWait(self.driver, 20)
+            self.current_proxy = new_proxy
+            
+            # Navigate to the target URL
+            if current_url:
+                print(f"🔗 Navigating to: {current_url}")
+                self.driver.get(current_url)
+                time.sleep(3)
+                
+                # Restore cookies
+                for cookie in cookies:
+                    try:
+                        self.driver.add_cookie(cookie)
+                    except Exception as e:
+                        # Skip invalid cookies
+                        pass
+                
+                # Refresh to apply cookies
+                self.driver.refresh()
+                time.sleep(5)
+            
+            print(f"✅ Proxy rotation complete for {step_name}")
+            return True
+        
+        except Exception as e:
+            print(f"❌ Proxy rotation failed for {step_name}: {e}")
+            return False
+
+    def smart_run_with_step_rotation(self):
+        """Run bot with proxy rotation before each major step"""
+        max_total_attempts = len(self.PROXY_LIST) * 4  # More attempts
+        
+        for overall_attempt in range(max_total_attempts):
+            try:
+                print(f"🚀 Smart run attempt {overall_attempt + 1}")
+                
+                # STEP 1: Login with proxy rotation
+                login_success = False
+                for login_attempt in range(3):  # Try login 3 times
+                    try:
+                        print(f"🔐 Login attempt {login_attempt + 1}")
+                        
+                        if login_attempt > 0:
+                            if not self.rotate_proxy_for_step("LOGIN_RETRY"):
+                                continue
+                        
+                        if self.login():
+                            login_success = True
+                            break
+                        else:
+                            print("❌ Login failed, rotating proxy...")
+                            
+                    except Exception as e:
+                        print(f"⚠️ Login attempt error: {e}")
+                        continue
+                
+                if not login_success:
+                    print("❌ All login attempts failed")
+                    continue
+                
+                # STEP 2: Rotate proxy before looking for Select button
+                if not self.rotate_proxy_for_step("SELECT_BUTTON"):
+                    continue
+                
+                select_success = False
+                for select_attempt in range(3):  # Try select 3 times
+                    try:
+                        print(f"🎯 Select button attempt {select_attempt + 1}")
+                        
+                        if select_attempt > 0:
+                            if not self.rotate_proxy_for_step("SELECT_RETRY"):
+                                continue
+                        
+                        if self.click_first_select():
+                            select_success = True
+                            break
+                        else:
+                            print("❌ Select failed, rotating proxy...")
+                            
+                    except Exception as e:
+                        print(f"⚠️ Select attempt error: {e}")
+                        continue
+                
+                if not select_success:
+                    print("❌ All select attempts failed")
+                    continue
+                
+                # STEP 3: Rotate proxy before Continue button
+                if not self.rotate_proxy_for_step("CONTINUE_BUTTON"):
+                    continue
+                
+                continue_success = False
+                for continue_attempt in range(3):  # Try continue 3 times
+                    try:
+                        print(f"➡️ Continue attempt {continue_attempt + 1}")
+                        
+                        if continue_attempt > 0:
+                            if not self.rotate_proxy_for_step("CONTINUE_RETRY"):
+                                continue
+                        
+                        if self.click_continue():
+                            continue_success = True
+                            break
+                        else:
+                            print("❌ Continue failed, rotating proxy...")
+                            
+                    except Exception as e:
+                        print(f"⚠️ Continue attempt error: {e}")
+                        continue
+                
+                if not continue_success:
+                    print("❌ All continue attempts failed")
+                    continue
+                
+                # STEP 4: Rotate proxy before final page
+                if not self.rotate_proxy_for_step("FINAL_PAGE"):
+                    continue
+                
+                try:
+                    self.wait_final_page()
+                    print("🎉 SUCCESS! Completed all steps!")
+                    return True
+                    
+                except Exception as e:
+                    print(f"⚠️ Final page error: {e}")
+                    continue
+                    
+            except Exception as e:
+                print(f"⚠️ Overall attempt error: {e}")
+                continue
+        
+        print("❌ All smart attempts failed")
+        return False
+
+    def enhanced_login_with_session_management(self):
+        """Enhanced login that preserves session across proxy changes"""
+        self.driver.get(self.LOGIN_URL)
+        time.sleep(5)
+
+        try:
+            if self.is_blocked():
+                print("🚫 Blocked on initial login page")
+                return False
+
+            print(f"Initial page title: {self.driver.title}")
+            print(f"Initial URL: {self.driver.current_url}")
+            
+            # Get initial session data
+            initial_cookies = self.driver.get_cookies()
+            
+            # Find and fill login form
+            email_field = None
+            try:
+                email_field = self.wait.until(EC.visibility_of_element_located((By.ID, "email-input-field")))
+            except:
+                try:
+                    email_field = self.wait.until(EC.visibility_of_element_located((By.NAME, "email")))
+                except:
+                    try:
+                        email_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='email']")))
+                    except:
+                        print("❌ Email field not found")
+                        return False
+            
+            if email_field:
+                email_field.send_keys(self.EMAIL)
+                time.sleep(2)
+                
+                # Find password field
+                password_field = None
+                try:
+                    password_field = self.wait.until(EC.visibility_of_element_located((By.ID, "password-input-field")))
+                except:
+                    try:
+                        password_field = self.wait.until(EC.visibility_of_element_located((By.NAME, "password")))
+                    except:
+                        try:
+                            password_field = self.wait.until(EC.visibility_of_element_located((By.XPATH, "//input[@type='password']")))
+                        except:
+                            print("❌ Password field not found")
+                            return False
+                
+                if password_field:
+                    password_field.send_keys(self.PASSWORD)
+                    time.sleep(2)
+                    
+                    # Find login button
+                    login_button = None
+                    try:
+                        login_button = self.wait.until(EC.element_to_be_clickable((By.ID, "btn-login")))
+                    except:
+                        try:
+                            login_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit']")))
+                        except:
+                            try:
+                                login_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@type='submit']")))
+                            except:
+                                print("❌ Login button not found")
+                                return False
+                    
+                    if login_button:
+                        print("🔐 Clicking login button...")
+                        login_button.click()
+                        
+                        # Wait for redirect to start
+                        time.sleep(3)
+                        
+                        # Check current state
+                        current_url = self.driver.current_url
+                        print(f"📍 Current URL after login: {current_url}")
+                        
+                        if "auth-callback" in current_url:
+                            print("📍 Reached auth-callback")
+                            
+                            # Wait for final redirect
+                            time.sleep(10)
+                            
+                            final_url = self.driver.current_url
+                            print(f"📍 Final URL: {final_url}")
+                            
+                            # Check if blocked
+                            if self.is_blocked():
+                                print("🚫 Blocked after auth flow")
+                                return False
+                            
+                            # Check for success indicators
+                            success_indicators = [
+                                "travel-groups" in final_url.lower(),
+                                "dashboard" in final_url.lower(),
+                                "appointment" in final_url.lower()
+                            ]
+                            
+                            if any(success_indicators):
+                                print("✅ Login successful!")
+                                return True
+                            else:
+                                print("⚠️ Login status unclear")
+                                return True  # Proceed anyway
+                        else:
+                            print("⚠️ Unexpected redirect flow")
+                            return False
+            
+            return False
+            
+        except Exception as e:
+            print(f"❌ Enhanced login error: {e}")
+            return False
+
 
     def run(self):
-        """Enhanced run method"""
-        return self.run_with_mid_session_switching()
+        """Main run method - now uses smart step rotation"""
+        return self.smart_run_with_step_rotation()
 
     def send_telegram_message(self, chat_id, message):
         url = f"https://api.telegram.org/bot{self.TELEGRAM_TOKEN}/sendMessage"
