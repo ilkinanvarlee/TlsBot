@@ -856,8 +856,8 @@ class TLSBot:
         return False
 
     def run(self):
-        """Original run method - now calls run_with_rotation"""
-        return self.run_with_rotation()
+        """Enhanced run method"""
+        return self.run_with_mid_session_switching()
 
     def send_telegram_message(self, chat_id, message):
         url = f"https://api.telegram.org/bot{self.TELEGRAM_TOKEN}/sendMessage"
